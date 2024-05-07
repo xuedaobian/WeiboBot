@@ -51,7 +51,13 @@ DM_HEADERS =  {
     "Sec-Fetch-Site": "same-origin",
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:109.0) Gecko/20100101 Firefox/113.0",
 }
-
+# dm_type 作为键值， 1: 私信， 6：群聊， 12：通知（活动通知/服务通知/系统通知） 13：上新通知
+MESSAGE_TYPE_DICT = {
+    1: "私信",
+    6: "群聊",
+    12: "通知",
+    13: "上新通知"
+}
 
 def timestamp_ms():
     return str(1000*datetime.now(timezone.utc).timestamp())
@@ -233,6 +239,7 @@ class WeiboBot:
     def __init__(self):
         self._session = requests.Session()
         self._contacts = dict()
+        self._contacts_type = dict()
 
         try:
             self.load_cookies()
@@ -538,6 +545,8 @@ class WeiboBot:
             #not strangers
             if "idstr" in contact["user"]:
                 self._contacts[contact["user"]["idstr"]] = contact["user"]["name"]
+                # 添加消息类型：dm_type 作为键值， 1: 私信， 6：群聊， 12：通知（活动通知/服务通知/系统通知） 13：上新通知
+                self._contacts_type[contact["user"]["idstr"]] = contact["message"]["dm_type"]
 
     def get_public_contacts(self):
         url = "https://api.weibo.com/webim/2/direct_messages/public/contacts.json"
@@ -546,8 +555,14 @@ class WeiboBot:
     def get_conversations_all(self):
         display_msg("save everything in private chat!")
         self.get_private_contacts()
-        for contact_id in self._contacts:
-            self.get_conversation(uid=contact_id, screen_name=self._contacts[contact_id])
+        # 遍历 contact 取 dm_type 为 1 和 6 的记录
+        # for id in self._contacts:
+        #     if(self._contacts_type[id] == 1):
+        #         self.get_conversation(uid=id, screen_name=self._contacts[id])
+        # 取 dm_type 为 6 的记录
+        for id in self._contacts:
+            if(self._contacts_type[id] == 6):
+                self.get_group_conversation(id=id, screen_name=self._contacts[id])
 
     def get_conversation(self, uid=None, max_count=10**10, screen_name=None):
         url = "https://api.weibo.com/webim/2/direct_messages/conversation.json"
@@ -591,6 +606,51 @@ class WeiboBot:
         for msg in reversed(saved_msgs):
             f.write(f"{reformat_timestamp(msg['created_at'])} {msg['sender_screen_name']}\n")
             f.write(f"{msg['text']}\n")
+
+
+    def get_group_conversation(self, id=None, max_count=10**10, screen_name=None):
+        url = "https://api.weibo.com/webim/groupchat/query_messages.json"
+        form = {
+            "count": "20",
+            "id": '4761715839862414',
+            "max_id": "0",
+            "source": "209678993",
+            "t": timestamp_ms(),
+            "query_sender": "1",
+            "convert_emoji": "1",
+        }
+
+        total_count = 0
+        saved_msgs = []
+        while True:
+            if total_count >= max_count:
+                break
+            r = self._session.get(url=url, headers=DM_HEADERS, params=form)
+            logger.debug(r.status_code)
+            response = r.json()
+            dms = response["messages"]
+            total_count+=len(dms)
+            if len(dms)==0:
+                break
+            for msg in dms:
+                print(msg["content"])
+                saved_msgs.append({"content":msg["content"], "sender_screen_name":msg["from_user"]["screen_name"], "time":msg["time"]})
+            print(f"{total_count} messages fetched")
+            form["max_id"] = str(int(dms[-1]["id"])-1)
+
+        save_folder = "saves"
+        if not os.path.exists(save_folder):
+            os.mkdir(save_folder)
+        if screen_name is not None:
+            f = open(os.path.join(save_folder, f"{id}_{screen_name}.txt"),"w",encoding="UTF-8")
+        else:
+            f = open(os.path.join(save_folder, f"{id}.txt"), "w",encoding="UTF-8")
+        for msg in reversed(saved_msgs):
+            f.write(f"{reformat_timestamp(msg['time'])} {msg['sender_screen_name']}\n")
+            f.write(f"{msg['content']}\n")
+
+
+
 
 if __name__ == "__main__":
     b=WeiboBot()
