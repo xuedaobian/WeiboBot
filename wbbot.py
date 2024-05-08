@@ -65,6 +65,9 @@ def timestamp_ms():
 def reformat_timestamp(x):
     return datetime.strptime(x, "%a %b %d %H:%M:%S %z %Y").strftime('%Y-%m-%d %H:%M:%S %a %z')
 
+def timestamp2str(x):
+    return datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M:%S')
+
 def display_msg(msg):
     print(f"\n{msg:.>50}")
 
@@ -556,9 +559,9 @@ class WeiboBot:
         display_msg("save everything in private chat!")
         self.get_private_contacts()
         # 遍历 contact 取 dm_type 为 1 和 6 的记录
-        # for id in self._contacts:
-        #     if(self._contacts_type[id] == 1):
-        #         self.get_conversation(uid=id, screen_name=self._contacts[id])
+        for id in self._contacts:
+            if(self._contacts_type[id] == 1):
+                self.get_conversation(uid=id, screen_name=self._contacts[id])
         # 取 dm_type 为 6 的记录
         for id in self._contacts:
             if(self._contacts_type[id] == 6):
@@ -613,7 +616,7 @@ class WeiboBot:
         form = {
             "count": "20",
             "id": '4761715839862414',
-            "max_id": "0",
+            "max_mid": "0",
             "source": "209678993",
             "t": timestamp_ms(),
             "query_sender": "1",
@@ -629,6 +632,9 @@ class WeiboBot:
             logger.debug(r.status_code)
             response = r.json()
             dms = response["messages"]
+            # if request failed, break
+            if dms is None:
+                break
             total_count+=len(dms)
             if len(dms)==0:
                 break
@@ -636,7 +642,7 @@ class WeiboBot:
                 print(msg["content"])
                 saved_msgs.append({"content":msg["content"], "sender_screen_name":msg["from_user"]["screen_name"], "time":msg["time"]})
             print(f"{total_count} messages fetched")
-            form["max_id"] = str(int(dms[-1]["id"])-1)
+            form["max_mid"] = str(int(dms[-1]["id"])-1)
 
         save_folder = "saves"
         if not os.path.exists(save_folder):
@@ -646,7 +652,7 @@ class WeiboBot:
         else:
             f = open(os.path.join(save_folder, f"{id}.txt"), "w",encoding="UTF-8")
         for msg in reversed(saved_msgs):
-            f.write(f"{reformat_timestamp(msg['time'])} {msg['sender_screen_name']}\n")
+            f.write(f"{timestamp2str(msg['time'])} {msg['sender_screen_name']}\n")
             f.write(f"{msg['content']}\n")
 
 
