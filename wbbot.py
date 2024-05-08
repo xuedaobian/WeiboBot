@@ -615,7 +615,7 @@ class WeiboBot:
         url = "https://api.weibo.com/webim/groupchat/query_messages.json"
         form = {
             "count": "20",
-            "id": '4761715839862414',
+            "id": id,
             "max_mid": "0",
             "source": "209678993",
             "t": timestamp_ms(),
@@ -625,32 +625,38 @@ class WeiboBot:
 
         total_count = 0
         saved_msgs = []
-        while True:
-            if total_count >= max_count:
-                break
+        repeats = 0
+        while total_count < max_count:
             r = self._session.get(url=url, headers=DM_HEADERS, params=form)
             logger.debug(r.status_code)
             response = r.json()
             dms = response["messages"]
-            # if request failed, break
-            if dms is None:
+            # if request failed or no more messages, break
+            if dms is None or len(dms) == 0:
                 break
-            total_count+=len(dms)
-            if len(dms)==0:
-                break
+            # 如果返回的消息的第一条和上一次请求的第一条相同则说明重复请求，需要等待一段时间再次请求
+            last_len = len(dms)
+            if len(saved_msgs) > 0 and dms[0]["content"] == saved_msgs[-last_len]["content"]:
+                print("repeated request, waiting for some seconds")
+                repeats += 3
+                if repeats > 30:
+                    print("repeated request too many times, stop fetching")
+                    break
+                time.sleep(repeats)
+                continue
+            total_count += len(dms)
             for msg in dms:
-                print(msg["content"])
-                saved_msgs.append({"content":msg["content"], "sender_screen_name":msg["from_user"]["screen_name"], "time":msg["time"]})
+                saved_msgs.append({"content": msg["content"], "sender_screen_name": msg["from_user"]["screen_name"], "time": msg["time"]})
             print(f"{total_count} messages fetched")
-            form["max_mid"] = str(int(dms[-1]["id"])-1)
+            form["max_mid"] = str(int(dms[-1]["id"]))
 
         save_folder = "saves"
         if not os.path.exists(save_folder):
             os.mkdir(save_folder)
         if screen_name is not None:
-            f = open(os.path.join(save_folder, f"{id}_{screen_name}.txt"),"w",encoding="UTF-8")
+            f = open(os.path.join(save_folder, f"{id}_{screen_name}.txt"), "w", encoding="UTF-8")
         else:
-            f = open(os.path.join(save_folder, f"{id}.txt"), "w",encoding="UTF-8")
+            f = open(os.path.join(save_folder, f"{id}.txt"), "w", encoding="UTF-8")
         for msg in reversed(saved_msgs):
             f.write(f"{timestamp2str(msg['time'])} {msg['sender_screen_name']}\n")
             f.write(f"{msg['content']}\n")
