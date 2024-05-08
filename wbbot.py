@@ -645,6 +645,7 @@ class WeiboBot:
                 time.sleep(repeats)
                 continue
             total_count += len(dms)
+            repeats = repeats >> 1
             for msg in dms:
                 saved_msgs.append({"content": msg["content"], "sender_screen_name": msg["from_user"]["screen_name"], "time": msg["time"]})
             print(f"{total_count} messages fetched")
